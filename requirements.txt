@@ -1,7 +1,7 @@
 nose==1.2.1
 Werkzeug==0.8.3
 Jinja2==2.6
-Flask==0.9
+Flask==1.0
 Sphinx==1.1.3
 gunicorn==0.17.2
 pystache==0.5.3
