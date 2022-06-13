@@ -292,5 +292,5 @@ def general_error_handler(error):
     else:
         return render_template("500.html", **context), 500
 
-from .core_handlers import keyvalue_handlers, echo
+from .core_handlers import token_handlers, echo
 
