@@ -6,9 +6,7 @@ import json
 from uuid import uuid4
 import logging
 import socket
-from os import path
 from functools import wraps
-from subprocess import Popen, PIPE
 import datetime
 
 from flask import Flask, request, make_response
@@ -16,29 +14,13 @@ from flask import render_template
 from flask import g
 from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug import secure_filename
-from werkzeug.http import http_date
-from werkzeug.routing import Submount, Map
 
-from . import messages
-
-
-STATIC_DIR = os.environ.get('STATIC_DIR', path.join(os.getcwd(), 'static'))
-TEMPLATE_DIR = os.environ.get('TEMPLATE_DIR', path.join(os.getcwd(), 'templates'))
-app = Flask(__name__, static_folder=STATIC_DIR, template_folder=TEMPLATE_DIR)
-
+TEMPLATE_DIR = os.path.join(os.getcwd(), 'templates')
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
+app.config['TEMPLATE_DIR'] = TEMPLATE_DIR
+app.config['LOG_LEVEL'] = os.environ.get('LOG_LEVEL', 'INFO')
 app.config['VERSION'] = os.environ.get('CURRENT_SHA', None)
 app.config['X-HOSTNAME'] = os.environ.get('X_HOSTNAME', socket.gethostname())
-app.config['BIND_INTERFACE'] = os.environ.get('BIND_INTERFACE', '127.0.0.1')
-app.config['LOG_LEVEL'] = os.environ.get('LOG_LEVEL', 'INFO')
-app.config['USER_HEADER_NAME'] = os.environ.get('USER_HEADER_NAME', 'Uid')
-app.config['ROOT_STORAGE_PATH'] = os.environ.get("ROOT_STORAGE_PATH", "./storage")
-app.config['CACHE_ROOT'] = os.environ.get('CACHE_ROOT', '%s/cache' % (app.config['ROOT_STORAGE_PATH']))
-app.config['USE_RELOADER'] = os.environ.get('USE_RELOADER', 'True')
-app.config['TEMPLATE_DIR'] = TEMPLATE_DIR
-app.config['SUBMOUNT_PATH'] = os.environ.get('SUBMOUNT_PATH', None)
-# this is to be a comman delimited list of sources for which events will be emitted
-# this of course depends on the system supporting events for those sources
-app.config['LOCAL_EVENT_SOURCES'] = frozenset(os.environ.get('LOCAL_EVENT_SOURCES', '').split(","))
 
 app.jinja_loader = ChoiceLoader([
         FileSystemLoader("./templates"),
@@ -52,14 +34,6 @@ logging.basicConfig(
 )
 
 process_start_time = datetime.datetime.now()
-
-def emit_local_message(source, message=None):
-    if source in app.config['LOCAL_EVENT_SOURCES']:
-        wrapped = json.dumps(dict(source=source, message=message, user_token=g.user_token))
-        messages.send(wrapped, messages.LOCAL_PUBLISH)
-
-def get_storage_location(named):
-    return path.abspath(path.join(app.config['ROOT_STORAGE_PATH'], named))
 
 def remove_single_element_lists(d):
     new_dict = {}
@@ -106,32 +80,6 @@ def convert_types_in_list(this_list):
             new_value = convert_into_number(item)
         into_this_list.append(new_value)
     return into_this_list
-
-def cache_my_response(vary_by=None, expiration_seconds=900):
-    def cache_wrapper_decorator(f):
-        @wraps(f)
-        def cache_wrapper(*args, **kwargs):
-            if not vary_by:
-                cache_key = request.url
-            else:
-                from io import StringIO
-                key_buffer = StringIO()
-                key_buffer.write(request.url)
-                for vary_by_this in vary_by:
-                    key_buffer.write("%s" % request.values.get(vary_by_this, ''))
-                cache_key = key_buffer.getvalue()
-            cr = app.config['_CACHE'].get_or_return_from_cache(
-                cache_key,
-                expiration_seconds,
-                lambda: f(*args, **kwargs),
-                force_refresh = request.values.get('_reload_cache', False)
-            )
-            resp = app.make_response(cr[1])
-            if cr[0]:
-                resp.headers['Expires'] = http_date(cr[0])
-            return resp
-        return cache_wrapper
-    return cache_wrapper_decorator
 
 def make_my_response_json(f):
     @wraps(f)
@@ -209,18 +157,11 @@ def global_response_handler(response):
     response.headers['X-APP-VERSION'] = app.config['VERSION']
     return response
 
-def global_request_handler():
-    # this needs to be safe for use by the app
-    g.user_token = secure_filename(request.headers.get(app.config['USER_HEADER_NAME'], 'DEFAULT'))
-
 app.process_response = global_response_handler
-app.preprocess_request = global_request_handler
 
 ################################################################################
 # views
 
-@app.route("/", methods=["GET"])
-@app.route("/diag", methods=["GET"])
 @app.route("/diagnostic", methods=["GET"])
 def pyserver_core_diagnostic_view():
     """
@@ -239,41 +180,6 @@ def pyserver_core_diagnostic_view():
     response = make_response(json.dumps(diag_info, sort_keys=True))
     response.headers['X-Robots-Tag'] = 'noindex'
     return response
-
-@app.route("/diagnostic/echo", methods=["GET"])
-@make_my_response_json
-def pyserver_core_diagnostic_echo_view():
-    """
-        Helper endpoint for developing diagnostic checks.  Simply echoes back
-        any values provided in the inbound request.
-
-        :param '*': any inbound request parameters will be echoed back
-        :statuscode 200: always returns OK
-    """
-    return request.values.to_dict()
-
-@app.route("/diagnostic/fail", methods=["GET"])
-def pyserver_core_fail():
-    """ This endpoint is designed to show how the application fails.  Can be used
-        to assist in creating monitors to check the application health and respond
-        to failures.
-
-        :statuscode 500: always returns failure
-    """
-    raise Exception("Test exception so you know how the app behaves")
-
-@app.route("/message/local_publish", methods=["POST"])
-@make_my_response_json
-def pyserver_core_publish_message():
-    """ Allows for publishing of a local message.  """
-    if request.json:
-        msg = json.dumps(request.json)
-    else:
-        data = request.values.to_dict(flat=False)
-        msg = convert_types_in_dictionary(remove_single_element_lists(data))
-        msg = json.dumps(msg)
-    messages.send(msg, messages.LOCAL_PUBLISH)
-    return dict(message="ok")
 
 # end views
 ################################################################################

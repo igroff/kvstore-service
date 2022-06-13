@@ -2,10 +2,8 @@ import os
 import uuid
 import json
 import time
-import shutil
 import logging
 from os import path
-from functools import wraps
 import boto
 from boto.exception import S3ResponseError, JSONResponseError
 from boto.dynamodb2.table import Table
