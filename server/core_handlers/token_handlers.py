@@ -12,7 +12,7 @@ from boto.dynamodb2.table import Table
 from boto.dynamodb2.fields import HashKey
 from boto.dynamodb2.exceptions import ItemNotFound, ValidationException
 from flask import request, make_response
-from pyserver.core import app, make_my_response_json, convert_types_in_dictionary, remove_single_element_lists
+from server.core import app, make_my_response_json, convert_types_in_dictionary, remove_single_element_lists
 
 DDB_TABLE = os.environ.get('TOKEN_DYNAMO_TABLE')
 DDB_EXPIRED_TABLE = os.environ.get('TOKEN_EXPIRED_DYNAMO_TABLE')
@@ -24,7 +24,7 @@ else:
     ddb_kvstore = Table(DDB_TABLE)
     try:
         ddb_kvstore.describe()
-    except JSONResponseError, e:
+    except JSONResponseError as e:
         if "resource not found" in e.message:
             logging.info("creating ddb table %s for use with token service" %(DDB_TABLE))
             ddb_kvstore = Table.create(DDB_TABLE,
@@ -39,7 +39,7 @@ else:
     ddb_kvstore = Table(DDB_EXPIRED_TABLE)
     try:
         ddb_kvstore.describe()
-    except JSONResponseError, e:
+    except JSONResponseError as e:
         if "resource not found" in e.message:
             logging.info("creating ddb table %s for use with token service" %(DDB_EXPIRED_TABLE))
             ddb_kvstore = Table.create(DDB_EXPIRED_TABLE,
