@@ -7,7 +7,7 @@ gunicorn==0.17.2
 pystache==0.5.3
 Pygments==1.6
 docutils==0.10
-pymongo==2.4.2
+pymongo==2.5.2
 python-dateutil==2.1
 six==1.2.0
 boto==2.36.0
